@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OBJ + Video Texture Preview</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene-canvas"></canvas>
+    <div id="vignette"></div>
+
+    <!-- Empty state / drop zone -->
+    <div id="empty-state">
+      <div class="drop-panel">
+        <div class="drop-target" id="drop-obj" data-kind="obj">
+          <div class="drop-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z" />
+              <path d="M12 22 L12 12 M3 7 L12 12 L21 7" />
+            </svg>
+          </div>
+          <div class="drop-label">Drop <span>.obj</span> here</div>
+          <button class="browse-btn" id="browse-obj" type="button">Browse</button>
+          <input type="file" id="file-obj" accept=".obj" hidden />
+          <div class="loaded-name" id="name-obj"></div>
+        </div>
+
+        <div class="drop-divider"></div>
+
+        <div class="drop-target" id="drop-mp4" data-kind="mp4">
+          <div class="drop-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="5" width="14" height="14" rx="2" />
+              <path d="M21 8 L17 11 L21 14 Z" />
+            </svg>
+          </div>
+          <div class="drop-label">Drop <span>video or image</span> here</div>
+          <button class="browse-btn" id="browse-mp4" type="button">Browse</button>
+          <input
+            type="file"
+            id="file-mp4"
+            accept=".mp4,video/mp4,.jpg,.jpeg,.png,image/jpeg,image/png"
+            hidden
+          />
+          <button class="ndi-toggle-btn" id="ndi-toggle" type="button">or use an NDI source</button>
+          <div class="ndi-panel hidden" id="ndi-panel">
+            <select id="ndi-select">
+              <option value="">Searching…</option>
+            </select>
+            <div class="ndi-panel-actions">
+              <button class="icon-btn small" id="ndi-refresh" type="button" title="Refresh sources">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M3 12a9 9 0 1 1 3 6.7" />
+                  <path d="M3 8v5h5" />
+                </svg>
+              </button>
+              <button class="browse-btn" id="ndi-connect" type="button">Connect</button>
+            </div>
+          </div>
+          <div class="loaded-name" id="name-mp4"></div>
+        </div>
+      </div>
+      <div class="empty-hint" id="empty-hint">Load a model and a video or image to begin</div>
+    </div>
+
+    <!-- Status chip -->
+    <div id="status-chip" class="hidden">
+      <span id="status-text"></span>
+      <button id="status-clear" title="Clear and load new files">&times;</button>
+    </div>
+
+    <!-- Toast / error messages -->
+    <div id="toast" class="hidden"></div>
+
+    <!-- Bottom-right controls -->
+    <div id="toolbar" class="hidden">
+      <button class="icon-btn" id="btn-reset" title="Reset camera view">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M3 12a9 9 0 1 1 3 6.7" />
+          <path d="M3 8v5h5" />
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-zoom-in" title="Zoom in">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.3-4.3M11 8v6M8 11h6" />
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-zoom-out" title="Zoom out">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.3-4.3M8 11h6" />
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-play" title="Play / pause video">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" id="icon-play">
+          <path d="M6 4l14 8-14 8Z" />
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-mute" title="Mute / unmute">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" id="icon-mute">
+          <path d="M4 9v6h4l5 4V5L8 9Z" />
+          <path d="M17 8a5 5 0 0 1 0 8" />
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-fullscreen" title="Toggle fullscreen">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

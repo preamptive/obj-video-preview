@@ -1,0 +1,26 @@
+{
+  "name": "obj-video-preview",
+  "description": "Lightweight single-page viewer for previewing a .obj model with a video, image, or live NDI texture",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.165.0",
+    "ws": "^8.21.0"
+  },
+  "optionalDependencies": {
+    "@stagetimerio/grandiose": "^0.2.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
