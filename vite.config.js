@@ -76,15 +76,22 @@ function ndiPlugin() {
       while (receiveGeneration === myGeneration) {
         let frame;
         try {
-          // receiver.video() throws if a non-video frame (metadata/tally, etc.) arrives
-          // interleaved in the stream — the generic .data() call returns whatever frame
-          // type shows up without throwing, so we filter for video ourselves instead.
-          frame = await receiver.data(undefined, 2000);
+          frame = await receiver.video(2000);
         } catch (err) {
+          // grandiose's receiver.video() rejects (rather than resolving null) both when
+          // nothing new arrived within the timeout and when a non-video frame (metadata/
+          // tally, etc.) was interleaved in the stream. Both are routine — a live NDI
+          // stream is mostly gaps between frames from this call's point of view — so we
+          // retry instead of tearing the receiver down. Only bail on a genuine failure
+          // (e.g. the source disappearing), which is the "Connection lost" case.
+          const msg = err?.message || '';
+          if (msg.includes('No video data received') || msg.includes('Non-video data received')) {
+            continue;
+          }
           console.error('[ndi] receive error:', err);
           break;
         }
-        if (!frame || frame.type !== 'video' || receiveGeneration !== myGeneration) continue;
+        if (!frame || receiveGeneration !== myGeneration) continue;
 
         const header = Buffer.alloc(12);
         header.writeUInt32LE(frame.xres, 0);
