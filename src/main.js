@@ -25,6 +25,13 @@ const ndiSelect = document.getElementById('ndi-select');
 const ndiRefreshBtn = document.getElementById('ndi-refresh');
 const ndiConnectBtn = document.getElementById('ndi-connect');
 
+const recordIndicator = document.getElementById('record-indicator');
+const recordTimeEl = document.getElementById('record-time');
+const recordReadyBanner = document.getElementById('record-ready');
+const recordReadyText = document.getElementById('record-ready-text');
+const recordDownloadLink = document.getElementById('record-download-link');
+const recordDismissBtn = document.getElementById('record-dismiss');
+
 let toastTimer = null;
 function showToast(message, duration = 4200) {
   toast.textContent = message;
@@ -593,6 +600,9 @@ function updateMediaControlsVisibility() {
 }
 
 function clearAll() {
+  if (isRecording()) stopRecording();
+  discardPendingRecording();
+
   if (currentObject) {
     scene.remove(currentObject);
     disposeObject(currentObject);
@@ -738,6 +748,177 @@ ndiConnectBtn.addEventListener('click', () => {
 
 statusClear.addEventListener('click', clearAll);
 
+// ---------- Recording ----------
+// Captures the actual rendered canvas (camera moves, lighting, everything) via
+// canvas.captureStream(), not just the source media — this is a screen recording
+// of the 3D scene, not a re-export of the input file.
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordVideoEndedHandler = null;
+let recordAutoStopTimeout = null;
+let recordTimerInterval = null;
+let recordStartTime = 0;
+let pendingRecordingUrl = null;
+
+function discardPendingRecording() {
+  if (pendingRecordingUrl) {
+    URL.revokeObjectURL(pendingRecordingUrl);
+    pendingRecordingUrl = null;
+  }
+  recordReadyBanner.classList.add('hidden');
+}
+
+// createMediaElementSource() can only be called once per <video> for the page's
+// lifetime, and it silently reroutes the element's audio through Web Audio — so
+// this is set up lazily, once, and reconnected to the destination to stay audible.
+let audioCtx = null;
+let audioDestNode = null;
+function getVideoAudioStream() {
+  if (!audioDestNode) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaElementSource(video);
+    audioDestNode = audioCtx.createMediaStreamDestination();
+    source.connect(audioDestNode);
+    source.connect(audioCtx.destination);
+  }
+  return audioDestNode.stream;
+}
+
+function pickRecorderMimeType() {
+  const candidates = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  return candidates.find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
+}
+
+function formatRecordTime(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function isRecording() {
+  return !!mediaRecorder && mediaRecorder.state !== 'inactive';
+}
+
+function startRecording() {
+  if (!currentObject || !mediaReady) {
+    showToast('Load a model and a texture before recording');
+    return;
+  }
+  if (!canvas.captureStream || !window.MediaRecorder) {
+    showToast('Recording is not supported in this browser');
+    return;
+  }
+
+  discardPendingRecording();
+  const stream = canvas.captureStream(30);
+
+  if (mediaKind === 'video' && !video.muted) {
+    try {
+      getVideoAudioStream()
+        .getAudioTracks()
+        .forEach((track) => stream.addTrack(track));
+    } catch (err) {
+      console.warn('Could not attach audio to the recording:', err);
+    }
+  }
+
+  const mimeType = pickRecorderMimeType();
+  recordedChunks = [];
+  try {
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  } catch {
+    showToast('Recording is not supported in this browser');
+    return;
+  }
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+  };
+  mediaRecorder.onerror = (event) => {
+    // MediaRecorder reports failures (e.g. an unsupported/invalid track combination)
+    // as an 'error' event rather than a thrown exception, so without this handler a
+    // failure here is completely invisible — no console output, no toast, nothing.
+    console.error('[record] MediaRecorder error:', event.error || event);
+    showToast(`Recording failed: ${event.error?.message || event.error?.name || 'unknown error'}`);
+  };
+  mediaRecorder.onstop = () => {
+    if (recordedChunks.length === 0) {
+      showToast('Recording produced no data — try again');
+      return;
+    }
+    const blob = new Blob(recordedChunks, { type: mimeType || 'video/webm' });
+    // Browsers block downloads triggered from a non-click context (e.g. the video's
+    // own "ended" event when a fixed-length clip finishes recording itself), so rather
+    // than auto-triggering a save, surface a button the user clicks themselves — that's
+    // always a genuine user gesture regardless of what stopped the recording.
+    pendingRecordingUrl = URL.createObjectURL(blob);
+    recordDownloadLink.href = pendingRecordingUrl;
+    recordDownloadLink.download = `recording-${Date.now()}.webm`;
+    recordReadyText.textContent = `Recording ready (${(blob.size / (1024 * 1024)).toFixed(1)} MB)`;
+    recordReadyBanner.classList.remove('hidden');
+  };
+
+  // A fixed-length video source records exactly one full loop: rewind to the
+  // start, temporarily disable looping, and stop automatically when it ends.
+  // Live sources (NDI, or a static image) just record until manually stopped.
+  if (mediaKind === 'video') {
+    video.currentTime = 0;
+    const wasLoop = video.loop;
+    video.loop = false;
+    recordVideoEndedHandler = () => {
+      video.loop = wasLoop;
+      stopRecording();
+    };
+    video.addEventListener('ended', recordVideoEndedHandler, { once: true });
+    video.play().catch(() => {});
+
+    // Some browsers don't reliably fire "ended" after a programmatic currentTime
+    // reset, which would otherwise leave the recording running forever with no
+    // sign anything went wrong — this guarantees it stops at the clip's length
+    // even if that event never arrives.
+    if (Number.isFinite(video.duration) && video.duration > 0) {
+      recordAutoStopTimeout = setTimeout(() => {
+        if (isRecording()) {
+          video.loop = wasLoop;
+          stopRecording();
+        }
+      }, video.duration * 1000 + 500);
+    }
+  }
+
+  try {
+    mediaRecorder.start();
+  } catch (err) {
+    console.error('[record] start() failed:', err);
+    showToast(`Recording failed to start: ${err.message}`);
+    return;
+  }
+  recordStartTime = Date.now();
+  recordTimeEl.textContent = '0:00';
+  recordIndicator.classList.remove('hidden');
+  recordTimerInterval = setInterval(() => {
+    recordTimeEl.textContent = formatRecordTime(Date.now() - recordStartTime);
+  }, 500);
+  document.getElementById('btn-record').classList.add('recording');
+}
+
+function stopRecording() {
+  if (isRecording()) mediaRecorder.stop();
+  if (recordVideoEndedHandler) {
+    video.removeEventListener('ended', recordVideoEndedHandler);
+    recordVideoEndedHandler = null;
+  }
+  if (recordAutoStopTimeout) {
+    clearTimeout(recordAutoStopTimeout);
+    recordAutoStopTimeout = null;
+  }
+  clearInterval(recordTimerInterval);
+  recordTimerInterval = null;
+  recordIndicator.classList.add('hidden');
+  document.getElementById('btn-record').classList.remove('recording');
+}
+
 // ---------- Toolbar ----------
 document.getElementById('btn-reset').addEventListener('click', resetCameraView);
 document.getElementById('btn-zoom-in').addEventListener('click', () => dolly(0.82));
@@ -763,6 +944,16 @@ document.getElementById('btn-fullscreen').addEventListener('click', () => {
 });
 document.addEventListener('fullscreenchange', () => {
   document.getElementById('btn-fullscreen').classList.toggle('active', !!document.fullscreenElement);
+});
+
+document.getElementById('btn-record').addEventListener('click', () => {
+  if (isRecording()) stopRecording();
+  else startRecording();
+});
+
+recordDismissBtn.addEventListener('click', discardPendingRecording);
+recordDownloadLink.addEventListener('click', () => {
+  recordReadyBanner.classList.add('hidden');
 });
 
 // ---------- Resize ----------

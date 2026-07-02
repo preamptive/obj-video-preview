@@ -227,6 +227,13 @@ html, body {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
+#status-text {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #status-chip.hidden {
   opacity: 0;
   transform: translateY(-8px);
@@ -320,6 +327,102 @@ html, body {
   color: var(--accent);
   border-color: var(--accent-dim);
   background: rgba(95, 208, 232, 0.1);
+}
+
+.icon-btn.recording {
+  color: #ff5a5a;
+  border-color: rgba(255, 90, 90, 0.45);
+  background: rgba(255, 90, 90, 0.12);
+}
+
+/* Record indicator */
+#record-indicator {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 90, 90, 0.4);
+  background: rgba(30, 16, 16, 0.75);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 200, 200, 0.95);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.2s ease;
+}
+
+.record-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff5a5a;
+  animation: record-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes record-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Recording ready-to-download banner */
+#record-ready {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-dim);
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  font-size: 12.5px;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#record-ready.hidden {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  pointer-events: none;
+}
+
+#record-ready .browse-btn {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+#record-dismiss {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+#record-dismiss:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
 }
 
 .hidden {

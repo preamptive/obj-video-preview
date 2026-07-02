@@ -110,6 +110,22 @@
           <path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4" />
         </svg>
       </button>
+      <button class="icon-btn" id="btn-record" title="Record">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" id="icon-record">
+          <circle cx="12" cy="12" r="7" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+    </div>
+
+    <div id="record-indicator" class="hidden">
+      <span class="record-dot"></span>
+      <span id="record-time">0:00</span>
+    </div>
+
+    <div id="record-ready" class="hidden">
+      <span id="record-ready-text">Recording ready</span>
+      <a id="record-download-link" class="browse-btn" download>Download</a>
+      <button id="record-dismiss" title="Discard">&times;</button>
     </div>
   </div>
 
