@@ -32,6 +32,18 @@ const recordReadyText = document.getElementById('record-ready-text');
 const recordDownloadLink = document.getElementById('record-download-link');
 const recordDismissBtn = document.getElementById('record-dismiss');
 
+const timeline = document.getElementById('timeline');
+const timelineScrubber = document.getElementById('timeline-scrubber');
+const timelineCurrentEl = document.getElementById('timeline-current');
+const timelineDurationEl = document.getElementById('timeline-duration');
+
+function formatTime(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds || 0));
+  const minutes = Math.floor(s / 60);
+  const seconds = s % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 let toastTimer = null;
 function showToast(message, duration = 4200) {
   toast.textContent = message;
@@ -309,6 +321,9 @@ function loadVideoFile(file) {
   mediaURL = URL.createObjectURL(file);
   video.src = mediaURL;
   video.load();
+  timelineScrubber.value = 0;
+  timelineCurrentEl.textContent = '0:00';
+  timelineDurationEl.textContent = '0:00';
 
   nameMp4El.textContent = mediaLabel;
   dropMp4.classList.add('loaded');
@@ -597,6 +612,7 @@ function updateMediaControlsVisibility() {
   const isVideo = mediaKind === 'video';
   document.getElementById('btn-play').classList.toggle('hidden', !isVideo);
   document.getElementById('btn-mute').classList.toggle('hidden', !isVideo);
+  timeline.classList.toggle('hidden', !isVideo);
 }
 
 function clearAll() {
@@ -790,10 +806,7 @@ function pickRecorderMimeType() {
 }
 
 function formatRecordTime(ms) {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  return formatTime(ms / 1000);
 }
 
 function isRecording() {
@@ -933,6 +946,30 @@ video.addEventListener('pause', updatePlayIcon);
 document.getElementById('btn-mute').addEventListener('click', () => {
   video.muted = !video.muted;
   updateMuteIcon();
+});
+
+// ---------- Timeline scrubber ----------
+let isScrubbing = false;
+
+video.addEventListener('loadedmetadata', () => {
+  timelineDurationEl.textContent = formatTime(video.duration);
+});
+
+video.addEventListener('timeupdate', () => {
+  if (isScrubbing || !Number.isFinite(video.duration) || video.duration <= 0) return;
+  timelineScrubber.value = (video.currentTime / video.duration) * 100;
+  timelineCurrentEl.textContent = formatTime(video.currentTime);
+});
+
+timelineScrubber.addEventListener('input', () => {
+  isScrubbing = true;
+  if (Number.isFinite(video.duration) && video.duration > 0) {
+    video.currentTime = (Number(timelineScrubber.value) / 100) * video.duration;
+  }
+  timelineCurrentEl.textContent = formatTime(video.currentTime);
+});
+timelineScrubber.addEventListener('change', () => {
+  isScrubbing = false;
 });
 
 document.getElementById('btn-fullscreen').addEventListener('click', () => {

@@ -74,6 +74,13 @@
     <!-- Toast / error messages -->
     <div id="toast" class="hidden"></div>
 
+    <!-- Video scrubber -->
+    <div id="timeline" class="hidden">
+      <span id="timeline-current">0:00</span>
+      <input type="range" id="timeline-scrubber" min="0" max="100" step="0.1" value="0" />
+      <span id="timeline-duration">0:00</span>
+    </div>
+
     <!-- Bottom-right controls -->
     <div id="toolbar" class="hidden">
       <button class="icon-btn" id="btn-reset" title="Reset camera view">
