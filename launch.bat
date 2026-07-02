@@ -6,6 +6,7 @@ if not exist node_modules (
   call npm install
 )
 
+set BROWSER=chrome
 echo Starting OBJ Video Preview...
 call npm run dev -- --open
 pause
