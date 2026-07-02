@@ -4,6 +4,8 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
 // ---------- DOM refs ----------
 const canvas = document.getElementById('scene-canvas');
+const cropOverlay = document.getElementById('crop-overlay');
+const logoImg = document.getElementById('logo');
 const emptyState = document.getElementById('empty-state');
 const emptyHint = document.getElementById('empty-hint');
 const statusChip = document.getElementById('status-chip');
@@ -68,6 +70,35 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
+
+// Recordings always come out at a fixed 1920x1080, independent of whatever size the
+// browser window actually is. Each frame we draw a centered crop of the live canvas
+// (whichever dimension overflows a 16:9 frame gets cropped) into this hidden canvas,
+// which is what actually gets captured for recording — not the on-screen canvas itself.
+const RECORD_WIDTH = 1920;
+const RECORD_HEIGHT = 1080;
+const recordCanvas = document.createElement('canvas');
+recordCanvas.width = RECORD_WIDTH;
+recordCanvas.height = RECORD_HEIGHT;
+const recordCanvasCtx = recordCanvas.getContext('2d');
+
+function computeCropRect(width, height, targetAspect) {
+  const aspect = width / height;
+  if (aspect > targetAspect) {
+    const w = height * targetAspect;
+    return { x: (width - w) / 2, y: 0, w, h: height };
+  }
+  const h = width / targetAspect;
+  return { x: 0, y: (height - h) / 2, w: width, h };
+}
+
+function updateCropOverlayPosition() {
+  const rect = computeCropRect(window.innerWidth, window.innerHeight, RECORD_WIDTH / RECORD_HEIGHT);
+  cropOverlay.style.left = `${rect.x}px`;
+  cropOverlay.style.top = `${rect.y}px`;
+  cropOverlay.style.width = `${rect.w}px`;
+  cropOverlay.style.height = `${rect.h}px`;
+}
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -605,6 +636,8 @@ function updateUIState() {
     statusChip.classList.remove('hidden');
     toolbar.classList.remove('hidden');
     statusText.textContent = `${objFile.name} · ${mediaLabel}`;
+    updateCropOverlayPosition();
+    cropOverlay.classList.remove('hidden');
   }
 }
 
@@ -656,6 +689,7 @@ function clearAll() {
   emptyState.classList.remove('faded');
   statusChip.classList.add('hidden');
   toolbar.classList.add('hidden');
+  cropOverlay.classList.add('hidden');
   updateMediaControlsVisibility();
 
   fileObjInput.value = '';
@@ -765,9 +799,10 @@ ndiConnectBtn.addEventListener('click', () => {
 statusClear.addEventListener('click', clearAll);
 
 // ---------- Recording ----------
-// Captures the actual rendered canvas (camera moves, lighting, everything) via
-// canvas.captureStream(), not just the source media — this is a screen recording
-// of the 3D scene, not a re-export of the input file.
+// Captures the actual rendered scene (camera moves, lighting, everything), not just
+// the source media — a screen recording of the 3D scene, not a re-export of the input
+// file. Always outputs a fixed 1920x1080 via recordCanvas (see above), regardless of
+// the browser window's actual size/aspect ratio.
 let mediaRecorder = null;
 let recordedChunks = [];
 let recordVideoEndedHandler = null;
@@ -801,8 +836,32 @@ function getVideoAudioStream() {
 }
 
 function pickRecorderMimeType() {
-  const candidates = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  // Prefer mp4 where the browser can actually produce it (Chrome/Edge 105+, Safari) since
+  // it's the most broadly compatible container; Firefox has no mp4 MediaRecorder support
+  // at all, so this transparently falls back to webm there.
+  const candidates = [
+    'video/mp4;codecs=avc1,mp4a',
+    'video/mp4;codecs=h264,aac',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
   return candidates.find((type) => window.MediaRecorder?.isTypeSupported(type)) || '';
+}
+
+function fileExtensionForMimeType(mimeType) {
+  return mimeType.includes('mp4') ? 'mp4' : 'webm';
+}
+
+// MediaRecorder falls back to a fairly conservative default bitrate when none is
+// given, which shows up as visible compression artifacts on detailed textures.
+// Scale a generous target bitrate to the fixed recording resolution instead.
+function computeVideoBitrate() {
+  const pixels = RECORD_WIDTH * RECORD_HEIGHT;
+  const fps = 30;
+  const bitsPerPixelPerFrame = 0.2;
+  return Math.round(Math.min(50_000_000, Math.max(8_000_000, pixels * fps * bitsPerPixelPerFrame)));
 }
 
 function formatRecordTime(ms) {
@@ -818,13 +877,13 @@ function startRecording() {
     showToast('Load a model and a texture before recording');
     return;
   }
-  if (!canvas.captureStream || !window.MediaRecorder) {
+  if (!recordCanvas.captureStream || !window.MediaRecorder) {
     showToast('Recording is not supported in this browser');
     return;
   }
 
   discardPendingRecording();
-  const stream = canvas.captureStream(30);
+  const stream = recordCanvas.captureStream(30);
 
   if (mediaKind === 'video' && !video.muted) {
     try {
@@ -839,7 +898,10 @@ function startRecording() {
   const mimeType = pickRecorderMimeType();
   recordedChunks = [];
   try {
-    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    mediaRecorder = new MediaRecorder(stream, {
+      ...(mimeType ? { mimeType } : {}),
+      videoBitsPerSecond: computeVideoBitrate(),
+    });
   } catch {
     showToast('Recording is not supported in this browser');
     return;
@@ -867,7 +929,7 @@ function startRecording() {
     // always a genuine user gesture regardless of what stopped the recording.
     pendingRecordingUrl = URL.createObjectURL(blob);
     recordDownloadLink.href = pendingRecordingUrl;
-    recordDownloadLink.download = `recording-${Date.now()}.webm`;
+    recordDownloadLink.download = `recording-${Date.now()}.${fileExtensionForMimeType(mimeType || 'video/webm')}`;
     recordReadyText.textContent = `Recording ready (${(blob.size / (1024 * 1024)).toFixed(1)} MB)`;
     recordReadyBanner.classList.remove('hidden');
   };
@@ -998,6 +1060,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  updateCropOverlayPosition();
 });
 
 // ---------- Render loop ----------
@@ -1006,5 +1069,23 @@ function animate() {
   controls.update();
   updateKeyLight();
   renderer.render(scene, camera);
+
+  if (mediaReady) {
+    const rect = computeCropRect(canvas.width, canvas.height, RECORD_WIDTH / RECORD_HEIGHT);
+    recordCanvasCtx.drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, RECORD_WIDTH, RECORD_HEIGHT);
+
+    // Burn the logo into the recording at a fixed position/size proportional to the
+    // 1920x1080 output itself — deliberately independent of window size or the crop
+    // rect, so it's always present in the recording rather than depending on where
+    // the on-screen logo happens to fall relative to whatever gets cropped out.
+    if (logoImg.complete && logoImg.naturalWidth > 0) {
+      const logoHeight = RECORD_HEIGHT * 0.035;
+      const logoWidth = logoHeight * (logoImg.naturalWidth / logoImg.naturalHeight);
+      const margin = RECORD_WIDTH * 0.0125;
+      recordCanvasCtx.globalAlpha = 0.9;
+      recordCanvasCtx.drawImage(logoImg, margin, margin, logoWidth, logoHeight);
+      recordCanvasCtx.globalAlpha = 1;
+    }
+  }
 }
 animate();

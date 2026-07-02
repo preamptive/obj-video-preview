@@ -47,6 +47,28 @@ html, body {
   z-index: 5;
 }
 
+/* Recording crop guide: dims everything outside the fixed-resolution capture frame */
+#crop-overlay {
+  position: absolute;
+  z-index: 8;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+/* Logo */
+#logo {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  height: 37px;
+  width: auto;
+  opacity: 0.9;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* Empty state */
 #empty-state {
   position: absolute;
@@ -211,7 +233,7 @@ html, body {
 /* Status chip */
 #status-chip {
   position: absolute;
-  top: 16px;
+  top: 65px;
   left: 16px;
   z-index: 20;
   display: flex;
