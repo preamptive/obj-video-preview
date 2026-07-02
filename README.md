@@ -23,6 +23,10 @@ Open the printed `http://localhost:5173` URL (or whichever port Vite picks). Dro
 
 That's it for the core viewer — video/image texture support has no extra setup, on Windows, macOS, or Linux.
 
+### Windows: one-click launch
+
+After the first `npm install`, double-click [`launch.bat`](launch.bat) (or a shortcut to it) instead of using the terminal — it starts the dev server and opens your browser automatically. Right-click it → Send to → Desktop (create shortcut) to put a launcher icon on your Desktop.
+
 ## NDI support (optional)
 
 The NDI source dropdown talks to a small Node server embedded in the Vite dev process (see `vite.config.js`), backed by [`@stagetimerio/grandiose`](https://github.com/stagetimerio/grandiose), a native Node addon for the NDI SDK.
