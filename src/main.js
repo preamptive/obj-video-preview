@@ -62,7 +62,11 @@ const FOG_NEAR_DEFAULT = 26;
 const FOG_FAR_DEFAULT = 110;
 scene.fog = new THREE.Fog(0x0a0a0c, FOG_NEAR_DEFAULT, FOG_FAR_DEFAULT);
 
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+// Vertical FOV for a 50mm-equivalent lens on a full-frame (36x24mm) sensor:
+// 2 * atan(24 / (2 * 50)) ≈ 27°. Three.js's fov parameter is vertical FOV, so this
+// directly matches "normal"/human-eye-like perspective, independent of window aspect.
+const CAMERA_FOV_50MM = 27;
+const camera = new THREE.PerspectiveCamera(CAMERA_FOV_50MM, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(4, 3, 6);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
