@@ -10,6 +10,7 @@ const emptyState = document.getElementById('empty-state');
 const emptyHint = document.getElementById('empty-hint');
 const statusChip = document.getElementById('status-chip');
 const statusText = document.getElementById('status-text');
+const statusSwap = document.getElementById('status-swap');
 const statusClear = document.getElementById('status-clear');
 const toolbar = document.getElementById('toolbar');
 const toast = document.getElementById('toast');
@@ -234,6 +235,64 @@ video.addEventListener('loadeddata', () => {
   });
 });
 
+// ---------- Model persistence (IndexedDB) ----------
+// Remembers the last-loaded .obj across page reloads so you don't have to re-pick
+// the model every time you just want to try a different video/image/NDI source.
+const MODEL_DB_NAME = 'obj-video-preview';
+const MODEL_DB_VERSION = 1;
+const MODEL_STORE_NAME = 'lastModel';
+const MODEL_KEY = 'current';
+
+function openModelDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(MODEL_DB_NAME, MODEL_DB_VERSION);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(MODEL_STORE_NAME);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveLastModel(file) {
+  try {
+    const db = await openModelDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(MODEL_STORE_NAME, 'readwrite');
+      tx.objectStore(MODEL_STORE_NAME).put(file, MODEL_KEY);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('Could not persist model for next session:', err);
+  }
+}
+
+async function loadLastModel() {
+  try {
+    const db = await openModelDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(MODEL_STORE_NAME, 'readonly');
+      const req = tx.objectStore(MODEL_STORE_NAME).get(MODEL_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('Could not restore last model:', err);
+    return null;
+  }
+}
+
+async function clearLastModel() {
+  try {
+    const db = await openModelDb();
+    const tx = db.transaction(MODEL_STORE_NAME, 'readwrite');
+    tx.objectStore(MODEL_STORE_NAME).delete(MODEL_KEY);
+  } catch {
+    /* best-effort */
+  }
+}
+
 // ---------- Loading OBJ ----------
 function disposeObject(obj) {
   obj.traverse((child) => {
@@ -312,6 +371,7 @@ function loadObjFile(file) {
       frameObject();
       tryApplyTexture();
       updateUIState();
+      saveLastModel(file);
     },
     undefined,
     () => {
@@ -651,6 +711,7 @@ function updateMediaControlsVisibility() {
 function clearAll() {
   if (isRecording()) stopRecording();
   discardPendingRecording();
+  clearLastModel();
 
   if (currentObject) {
     scene.remove(currentObject);
@@ -794,6 +855,13 @@ ndiConnectBtn.addEventListener('click', () => {
   ndiPanel.classList.add('hidden');
   clearInterval(ndiPollTimer);
   ndiPollTimer = null;
+});
+
+statusSwap.addEventListener('click', () => {
+  // Reveals the same drop-zone/browse/NDI UI used for the initial load, without
+  // touching anything currently loaded — updateUIState() re-fades it automatically
+  // once a new model or media selection completes.
+  emptyState.classList.toggle('faded');
 });
 
 statusClear.addEventListener('click', clearAll);
@@ -1089,3 +1157,11 @@ function animate() {
   }
 }
 animate();
+
+// ---------- Restore last model ----------
+loadLastModel().then((file) => {
+  if (file) {
+    loadObjFile(file);
+    showToast(`Restored last model: ${file.name}`);
+  }
+});
